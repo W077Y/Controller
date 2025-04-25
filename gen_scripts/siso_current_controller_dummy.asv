@@ -108,74 +108,98 @@ y_sim  = nan(size(sys_ref.C,1), N);
 
 y_noise = randn(size(sys_ref.C,1), N) * 1E-2;
 
-A_sim = sys_ref.A;
-B_sim = sys_ref.B;
-C_sim = sys_ref.C;
+for sys_idx = 1:numel(syss)
+  A_sim = syss{sys_idx}.A;
+  B_sim = syss{sys_idx}.B;
+  C_sim = syss{sys_idx}.C;
 
-PP     = P0;
-x_kal_ = X0;
-x_int_ = 0;
-x_sim_ = zeros(size(A_sim,1), 1);
-
-for idx = 1:numel(t)
+  PP     = P0;
+  x_kal_ = X0;
+  x_int_ = 0;
+  x_sim_ = zeros(size(A_sim,1), 1);
+  
+  for idx = 1:numel(t)
     K = PP * C_kal' * (C_kal * PP * C_kal' + R_kal)^-1;
     P_ = (eye(nn_kal) - K*C_kal) * PP;
     PP = A_kal * P_ * A_kal' + Q_kal;
-    
+
     y_meas_ = C_sim * x_sim_;
-    y_ref(:, idx) = y_meas_;
-    y_meas_ = y_meas_ + y_noise(:,idx);
-    y_meas(:, idx) = y_meas_;
-    
+    y_ref(:, idx, sys_idx) = y_meas_;
+    y_meas_ = y_meas_ + y_noise(:,idx,sys_idx);
+    y_meas(:, idx, sys_idx) = y_meas_;
+
     y_ = C_kal*x_kal_;
     x_kal_ = x_kal_ + K * (y_meas_ - y_);
-    
-    y(:, idx) = C_kal*x_kal_;
-    x(:, idx) = x_kal_;
-    
+
+    y(:, idx, sys_idx) = C_kal*x_kal_;
+    x(:, idx, sys_idx) = x_kal_;
+
     u_star_ = -hT_kal*x_kal_ - hT_int*x_int_;
-    u_star(:, idx) = u_star_;
-    
+    u_star(:, idx, sys_idx) = u_star_;
+
     u_dash_ = clip(u_star_, -1.0, 1.0);
-    u_dash(:, idx) = u_dash_;
-    
+    u_dash(:, idx, sys_idx) = u_dash_;
+
     u_ = round(u_dash_*800)/800;
-    u(:, idx) = u_;
-    
+    u(:, idx, sys_idx) = u_;
+
     r_ = r(idx);
     e_ = r_ - C_int * x_kal_;
-    e(:,idx) = e_;
+    e(:,idx,sys_idx) = e_;
     
     x_kal_ = A_kal * x_kal_ + B_kal*u_;
     x_int_ = A_int * x_int_ + B_int*[u_dash_; u_star_; e_];
-    
+
     x_sim_ = A_sim * x_sim_ + B_sim * u_;
+  end
 end
 
 %%
 figure(); hold on; grid on;
-    pl_y = subplot(311); hold on; grid on;
-    pl_u = subplot(312); hold on; grid on;
-    pl_n = subplot(313); hold on; grid on;
-      
-    plot(pl_y, t, y_ref(:,:), 'r.', LineWidth=1);
+  pl_y = subplot(311); hold on; grid on;
+  pl_u = subplot(312); hold on; grid on;
+  pl_n = subplot(313); hold on; grid on;
+  
+  for idx = 1:numel(syss)
+    plot(pl_y, t, y_ref(:,:,idx), 'r.', LineWidth=1);
     
-    plot(pl_u, t, u_star(:,:), 'b-', LineWidth=1);
-    plot(pl_u, t, u_dash(:,:), 'r-', LineWidth=1);
-    plot(pl_u, t, u(:,:), 'g-', LineWidth=1);
-    
-    plot(pl_n, t, x(end,:), 'm-', LineWidth=1);
-    
-    plot(pl_y, t, r, 'k', LineWidth=1);
+    plot(pl_u, t, u_star(:,:,idx), 'b-', LineWidth=1);
+    plot(pl_u, t, u_dash(:,:,idx), 'r-', LineWidth=1);
+    plot(pl_u, t, u(:,:,idx), 'g-', LineWidth=1);
+
+    if idx == numel(syss)
+      plot(pl_n, t, x(end,:,idx), 'r.', LineWidth=1);
+    else
+      plot(pl_n, t, x(end,:,idx), 'm-', LineWidth=1);
+    end
+
+  end
+  plot(pl_y, t, r, 'k', LineWidth=1);
 
 %%
+
+figure(); hold on; grid on;
+  pl_y = subplot(311); hold on; grid on;
+  pl_u = subplot(312); hold on; grid on;
+  pl_n = subplot(313); hold on; grid on;
+  
+  plot(pl_y, t, y_meas(:,:,1), 'r.', LineWidth=1);
+  plot(pl_y, t, r, 'k', LineWidth=1);
+
+  plot(pl_u, t, u_star(:,:,1), 'b-', LineWidth=1);
+  plot(pl_u, t, u_dash(:,:,1), 'r-', LineWidth=1);
+  plot(pl_u, t, u(:,:,1), 'g-', LineWidth=1);
+
+  plot(pl_n, t, x(:,:,1), LineWidth=1);
+
+
   sel = t < 0.5;
-  test_data.y_meas = y_meas(:,sel);
-  test_data.u_star = u_star(:,sel);
-  test_data.u_dash = u_dash(:,sel);
-  test_data.u      = u(:,sel);
-  test_data.x      = x(:,sel);
-  test_data.r      = r(sel)';
+  test_data.y_meas = y_meas(:,sel,1);
+  test_data.u_star = u_star(:,sel,1);
+  test_data.u_dash = u_dash(:,sel,1);
+  test_data.u      = u(:,sel,1);
+  test_data.x      = x(:,sel,1);
+  test_data.r      = r(sel,1)';
 
 
 %%
@@ -213,13 +237,11 @@ figure(); hold on; grid on;
   str = str + sprintf('#include "%s.hpp\"\n\n', export_file_name);
   str = str + sprintf("namespace %s\n{\n", namespace_location);
   str = str + sprintf("  parameter_t const param{ // ... \n");
-  str = str + sprintf("    .observer{\n");
-  str = str + sprintf("      .A%s,\n",print_matrix(A_kal, "float"));
-  str = str + sprintf("      .B%s,\n",print_matrix(B_kal, "float"));
-  str = str + sprintf("      .C%s,\n",print_matrix(C_kal, "float"));
-  str = str + sprintf("      .Q%s,\n",print_matrix(Q_kal, "float"));
-  str = str + sprintf("      .R%s,\n",print_matrix(R_kal, "float"));
-  str = str + sprintf("    },\n");
+  str = str + sprintf("    .A_kal%s,\n",print_matrix(A_kal, "float"));
+  str = str + sprintf("    .B_kal%s,\n",print_matrix(B_kal, "float"));
+  str = str + sprintf("    .C_kal%s,\n",print_matrix(C_kal, "float"));
+  str = str + sprintf("    .Q_kal%s,\n",print_matrix(Q_kal, "float"));
+  str = str + sprintf("    .R_kal%s,\n",print_matrix(R_kal, "float"));
   str = str + sprintf("    .hT_kal%s,\n",print_matrix(hT_kal, "float"));
   str = str + sprintf("    .B_int%s,\n",print_matrix(B_int, "float"));
   str = str + sprintf("    .C_int%s,\n",print_matrix(C_int, "float"));
