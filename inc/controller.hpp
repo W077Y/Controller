@@ -42,7 +42,6 @@ namespace controller::calculator
     SISO_KalmanIntController(parameter_t const& param)
         : m_param{ param }
     {
-      this->reset();
     }
 
     exmath::matrix_t<value_type, no, 1> calculate_y_kal() const { return this->m_param.C_kal * this->m_x_kal; }
@@ -76,7 +75,7 @@ namespace controller::calculator
   private:
     parameter_t const& m_param;
 
-    exmath::matrix_t<value_type, nn, nn> m_pp    = {};
+    exmath::matrix_t<value_type, nn, nn> m_pp    = this->m_param.eye;
     exmath::matrix_t<value_type, nn, 1>  m_x_kal = {};
     exmath::matrix_t<value_type, nr, 1>  m_x_int = {};
   };

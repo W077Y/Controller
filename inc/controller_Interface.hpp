@@ -79,12 +79,12 @@ namespace controller
 
     struct actuator_output_t
     {
-      target_type u_dash;
-      target_type u;
+      target_type ranged_value;
+      target_type target_value;
     };
 
-    [[nodiscard]] virtual actuator_output_t set_target_value(target_type const& u_star) = 0;
-    [[nodiscard]] virtual actuator_output_t get_target_value() const                    = 0;
+    [[nodiscard]] virtual actuator_output_t set_target_value(target_type const& wish_value) = 0;
+    [[nodiscard]] virtual target_type       get_target_value() const                        = 0;
   };
 
   template <typename TT, typename TV> struct Controller_Interface: public Actuator_Interface<TT>
