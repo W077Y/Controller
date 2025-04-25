@@ -21,8 +21,9 @@ namespace controller
     {
       no_error = static_cast<uint32_t>(State::enabled),
       generic  = static_cast<uint32_t>(State::fault),
-      invalid_measure_value,
+      actuator_fault,
       plant_missmatch,
+      invalid_measure_value,
     };
 
     struct status_t
@@ -87,13 +88,24 @@ namespace controller
     [[nodiscard]] virtual target_type       get_target_value() const                        = 0;
   };
 
-  template <typename TT, typename TV> struct Controller_Interface: public Actuator_Interface<TT>
+  template <typename TT, typename TV, typename TD> struct Controller_Interface;
+
+  template <typename TT, typename TV> struct Controller_Interface<TT, TV, void>: public Actuator_Interface<TT>
   {
     using value_type = std::remove_cv_t<TV>;
 
     virtual ~Controller_Interface() = default;
 
     [[nodiscard]] virtual value_type get_value() const = 0;
+  };
+
+  template <typename TT, typename TV, typename TD = void> struct Controller_Interface: public Controller_Interface<TT, TV, void>
+  {
+    using distrubance_type = std::remove_cv_t<TD>;
+
+    virtual ~Controller_Interface() = default;
+
+    [[nodiscard]] virtual distrubance_type get_disturbance() const = 0;
   };
 }    // namespace controller
 
