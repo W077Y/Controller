@@ -43,12 +43,12 @@ nn_kal = size(A_kal,2);
 ni_kal = size(B_kal,2);
 no_kal = size(C_kal,1);
 
-C_int = C_kal(1,:);
+C_int = C_kal(:,:);
 
 
 %%
-R_kal = 1E-4;
-Q_kal = blkdiag(B_kal(1:2)*B_kal(1:2)'* 3E-6,  1E-3);
+R_kal = blkdiag(1E-2, 1E-2);
+Q_kal = blkdiag(B_kal(1:3,:)*B_kal(1:3,:)'* 1E-3,  1E-16,  1E-16);
 
 P0    = eye(nn_kal);
 X0    = zeros(nn_kal,1);
@@ -56,33 +56,29 @@ X0    = zeros(nn_kal,1);
 %%  Regler
 
   A_reg = [ ...
-   sys_ref.A, zeros(2,1); ...
-  -sys_ref.C,          1; ...
+   sys_ref.A, zeros(3,2); ...
+  -sys_ref.C,     eye(2); ...
   ];
-
-  A_reg = A_reg / 20; %% Angstfactor
-
-
 
 B_reg = [ ...
   sys_ref.B; ...
-          0; ...
+ zeros(2,2); ...
   ];
 
-nn = 2;
-ni = 1;
-no = 1;
+nn = 3;
+ni = 2;
+no = 2;
 
 %%
-Q_reg = blkdiag(0,0,1)*1E0;
-R_reg = blkdiag(1)*1E-1;
+Q_reg = blkdiag(1,1,1,1,1)*1E0;
+R_reg = blkdiag(1,1)*1E3;
 [hT_star, ~, e] = dlqr(A_reg, B_reg, Q_reg, R_reg, zeros(nn+ni,no));
 
 e
 
 %%
 
-hT_kal = [hT_star(:, 1:nn), 0]
+hT_kal = [hT_star(:, 1:nn), zeros(2,2)]
 hT_int = hT_star(:, nn+1:end)
 
 A_int = eye(no,no);
@@ -91,33 +87,37 @@ B_int = [ ...
   ];
 
 
-
 %%
 Ts = 1/ 1E4;
-N = 1E4;
+N = 2E3;
 
 t = (0:N-1)' * Ts;
-r = zeros(size(t));
-r(0.1<t) =  1;
-r(0.3<t) =  0.5;
-r(0.5<t) = -1;
-r(0.7<t) = -0.5;
+r = zeros(2, numel(t));
+
+r(1,0.05<t) = 1;
+r(2,0.05<t) = 1;
+
+r(1,0.10<t) = 1;
+r(2,0.10<t) = 0;
+
+r(1,0.15<t) = 0;
+r(2,0.15<t) = 1;
 
 x      = nan(nn_kal, N);
-x_int  = nan(     1, N);
+x_int  = nan(     2, N);
 y      = nan(no_kal, N);
 
-u_star = nan(1, N);
-u_dash = nan(1, N);
-u      = nan(1, N);
-e      = nan(1, N);
+u_star = nan(2, N);
+u_dash = nan(2, N);
+u      = nan(2, N);
+e      = nan(2, N);
 
 y_ref  = nan(no_kal, N);
 y_meas = nan(no_kal, N);
 x_sim  = nan(size(sys_ref.A,1), N);
 y_sim  = nan(size(sys_ref.C,1), N);
 
-y_noise = randn(size(sys_ref.C,1), N) * 1E-2;
+y_noise = randn(size(sys_ref.C,1), N) * 1E-3;
 
 
 A_sim = sys_ref.A;
@@ -126,7 +126,7 @@ C_sim = sys_ref.C;
 
 PP     = P0;
 x_kal_ = X0;
-x_int_ = 0;
+x_int_ = zeros(2,1);
 x_sim_ = zeros(size(A_sim,1), 1);
 
 for idx = 1:numel(t)
@@ -142,19 +142,21 @@ for idx = 1:numel(t)
     y_ = C_kal*x_kal_;
     x_kal_ = x_kal_ + K * (y_meas_ - y_);
     
-    y(:, idx) = C_kal*x_kal_;
-    x(:, idx) = x_kal_;
-    
+    y(:, idx)    = C_kal*x_kal_;
+    x(:, idx)    = x_kal_;
+    x_int(:,idx) = x_int_;
+
     u_star_ = -hT_kal*x_kal_ - hT_int*x_int_;
     u_star(:, idx) = u_star_;
     
-    u_dash_ = clip(u_star_, -1.0, 1.0);
+    u_dash_ = clip(u_star_, [1;1]*-2.0, [1;1]*2.0);
     u_dash(:, idx) = u_dash_;
     
-    u_ = round(u_dash_*800)/800;
+    u_ = u_dash_; round(u_dash_, 3);
+
     u(:, idx) = u_;
     
-    r_ = r(idx);
+    r_ = r(:,idx);
     e_ = r_ - C_int * x_kal_;
     e(:,idx) = e_;
     
@@ -171,32 +173,21 @@ figure(); hold on; grid on;
     pl_n = subplot(313); hold on; grid on;
 
   
-    plot(pl_y, t, y_ref(:,:), 'r.', LineWidth=1);
-    
-    plot(pl_u, t, u_star(:,:), 'b-', LineWidth=1);
-    plot(pl_u, t, u_dash(:,:), 'r-', LineWidth=1);
-    plot(pl_u, t, u(:,:), 'g-', LineWidth=1);
-    
-    plot(pl_n, t, x(end,:), 'm-', LineWidth=1);
+    plot(pl_y, t, y_meas(1,:), 'r.', LineWidth=1);
+    plot(pl_y, t, y(1,:),      'r-', LineWidth=1);
+
+    plot(pl_y, t, y_meas(2,:), 'b.', LineWidth=1);
+    plot(pl_y, t, y(2,:),      'b-', LineWidth=1);
     
     plot(pl_y, t, r, 'k', LineWidth=1);
+    
+    plot(pl_u, t, u_star(:,:), 'b.', LineWidth=1);
+    plot(pl_u, t, u_dash(:,:), 'r-', LineWidth=1);
+    plot(pl_u, t, u(:,:),      'g-', LineWidth=1);
+    
+    plot(pl_n, t, x(end-1:end,:), 'm-', LineWidth=1);
 
 %%
-
-figure(); hold on; grid on;
-  pl_y = subplot(311); hold on; grid on;
-  pl_u = subplot(312); hold on; grid on;
-  pl_n = subplot(313); hold on; grid on;
-  
-  plot(pl_y, t, y_meas(:,:,1), 'r.', LineWidth=1);
-  plot(pl_y, t, r, 'k', LineWidth=1);
-
-  plot(pl_u, t, u_star(:,:,1), 'b-', LineWidth=1);
-  plot(pl_u, t, u_dash(:,:,1), 'r-', LineWidth=1);
-  plot(pl_u, t, u(:,:,1), 'g-', LineWidth=1);
-
-  plot(pl_n, t, x(:,:,1), LineWidth=1);
-
 
   sel = t < 0.5;
   test_data.y_meas = y_meas(:,sel);
@@ -204,9 +195,8 @@ figure(); hold on; grid on;
   test_data.u      = u(:,sel);
   test_data.x      = x(:,sel);
 
-
 %%
-  export_file_name   = "tst_data_calc_SISO_KalmanObserver";
+  export_file_name   = "tst_data_calc_MIMO_KalmanObserver";
   namespace_location = "test_data::parameter";
 
   str_hpp = "";
@@ -218,7 +208,7 @@ figure(); hold on; grid on;
   str_hpp = str_hpp + sprintf("#include <controller.hpp>\n\n");
   
   str_hpp = str_hpp + sprintf("namespace %s\n{\n", namespace_location);
-  str_hpp = str_hpp + sprintf("  using parameter_t = controller::calculator::SISO_KalmanObserver<float, 3>::parameter_t;\n");
+  str_hpp = str_hpp + sprintf("  using parameter_t = controller::calculator::MIMO_KalmanObserver<float, 5, 2, 2>::parameter_t;\n");
   str_hpp = str_hpp + sprintf("  extern parameter_t const param;\n");
   if exist("test_data", "var")
     str_hpp = str_hpp + sprintf("  extern exmath::matrix_t<float, %d, %d> const y_meas;\n", size(test_data.y_meas));
@@ -245,10 +235,10 @@ figure(); hold on; grid on;
   str = str + sprintf("    .R%s,\n",print_matrix(R_kal, "float"));
   str = str + sprintf("  };\n");
   if exist("test_data", "var")
-    str = str + sprintf("  exmath::matrix_t<float, %d, %d> const y_meas = %s;\n", size(test_data.y_meas), print_matrix(test_data.y_meas, "float"));
-    str = str + sprintf("  exmath::matrix_t<float, %d, %d> const y      = %s;\n", size(test_data.y), print_matrix(test_data.y, "float"));
-    str = str + sprintf("  exmath::matrix_t<float, %d, %d> const u      = %s;\n", size(test_data.u), print_matrix(test_data.u, "float"));
-    str = str + sprintf("  exmath::matrix_t<float, %d, %d> const x      = %s;\n", size(test_data.x), print_matrix(test_data.x, "float"));
+    str = str + sprintf("  exmath::matrix_t<float, %d, %d> const y_meas%s;\n", size(test_data.y_meas), print_matrix(test_data.y_meas, "float"));
+    str = str + sprintf("  exmath::matrix_t<float, %d, %d> const y%s;\n", size(test_data.y), print_matrix(test_data.y, "float"));
+    str = str + sprintf("  exmath::matrix_t<float, %d, %d> const u%s;\n", size(test_data.u), print_matrix(test_data.u, "float"));
+    str = str + sprintf("  exmath::matrix_t<float, %d, %d> const x%s;\n", size(test_data.x), print_matrix(test_data.x, "float"));
   end
   str = str + sprintf("} // namespace %s\n\n", namespace_location);
 

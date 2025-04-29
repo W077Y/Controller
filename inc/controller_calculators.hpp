@@ -57,6 +57,57 @@ namespace controller::calculator
     exmath::matrix_t<value_type, nn, 1>  m_x  = {};
   };
 
+  template <typename T, std::size_t N, std::size_t I, std::size_t O> class MIMO_KalmanObserver
+  {
+    using value_type                = std::remove_cvref_t<T>;
+    static constexpr std::size_t nn = N;
+    static constexpr std::size_t ni = I;
+    static constexpr std::size_t no = O;
+
+  public:
+    struct parameter_t
+    {
+      static constexpr exmath::matrix_t<value_type, nn, nn> eye = exmath::matrix_t<value_type, nn, nn>::unit();
+
+      exmath::matrix_t<value_type, nn, nn> const A;
+      exmath::matrix_t<value_type, nn, ni> const B;
+      exmath::matrix_t<value_type, no, nn> const C;
+      exmath::matrix_t<value_type, nn, nn> const Q;
+      exmath::matrix_t<value_type, no, no> const R;
+    };
+
+    MIMO_KalmanObserver(parameter_t const& param)
+        : m_param{ param }
+    {
+    }
+
+    exmath::matrix_t<value_type, no, 1>        get_y() const { return this->m_param.C * this->m_x; }
+    exmath::matrix_t<value_type, nn, 1> const& get_x() const { return this->m_x; }
+
+    void correction_step(exmath::matrix_t<value_type, no, 1> const& y_meas)
+    {
+      auto const K  = (this->m_pp * exmath::transpose(this->m_param.C)) * exmath::inv(this->m_param.C * this->m_pp * exmath::transpose(this->m_param.C) + this->m_param.R);
+      auto const p_ = (this->m_param.eye - K * this->m_param.C) * this->m_pp;
+      this->m_pp    = this->m_param.A * p_ * exmath::transpose(this->m_param.A) + this->m_param.Q;
+
+      this->m_x += K * (y_meas - this->get_y());
+    }
+
+    void update_step(exmath::matrix_t<value_type, ni, 1> const& input) { this->m_x = this->m_param.A * this->m_x + this->m_param.B * input; }
+
+    void reset()
+    {
+      this->m_pp = this->m_param.eye;
+      this->m_x  = {};
+    }
+
+  private:
+    parameter_t const& m_param;
+
+    exmath::matrix_t<value_type, nn, nn> m_pp = this->m_param.eye;
+    exmath::matrix_t<value_type, nn, 1>  m_x  = {};
+  };
+
   template <typename T, std::size_t N> class SISO_KalmanIntController
   {
     using value_type                = std::remove_cvref_t<T>;
