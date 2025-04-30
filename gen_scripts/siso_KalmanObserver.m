@@ -86,7 +86,7 @@ Ts = 1/ 1E4;
 N = 1E4;
 
 t = (0:N-1)' * Ts;
-r = zeros(size(t));
+r = zeros(1, numel(t));
 r(0.1<t) =  1;
 r(0.3<t) =  0.5;
 r(0.5<t) = -1;
@@ -187,12 +187,16 @@ figure(); hold on; grid on;
   plot(pl_n, t, x(:,:,1), LineWidth=1);
 
 
+%%
+
   sel = t < 0.5;
   test_data.y_meas = y_meas(:,sel);
-  test_data.y      = y(:,sel);
+  test_data.u_star = u_star(:,sel);
+  test_data.u_dash = u_dash(:,sel);
   test_data.u      = u(:,sel);
+  test_data.y      = y(:,sel);
   test_data.x      = x(:,sel);
-
+  test_data.r      = r(:,sel);
 
 %%
   export_file_name   = "tst_data_calc_SISO_KalmanObserver";
@@ -227,11 +231,15 @@ figure(); hold on; grid on;
   str = str + sprintf('#include "%s.hpp\"\n\n', export_file_name);
   str = str + sprintf("namespace %s\n{\n", namespace_location);
   str = str + sprintf("  parameter_t const param{ // ... \n");
-  str = str + sprintf("    .A%s,\n",print_matrix(A_kal, "float"));
-  str = str + sprintf("    .B%s,\n",print_matrix(B_kal, "float"));
-  str = str + sprintf("    .C%s,\n",print_matrix(C_kal, "float"));
+  str = str + sprintf("    .sys{\n");
+  str = str + sprintf("      .A%s,\n",print_matrix(A_kal, "float"));
+  str = str + sprintf("      .B%s,\n",print_matrix(B_kal, "float"));
+  str = str + sprintf("      .C%s,\n",print_matrix(C_kal, "float"));
+  str = str + sprintf("      .X0%s\n", print_matrix(X0,    "float"));
+  str = str + sprintf("    },\n");
   str = str + sprintf("    .Q%s,\n",print_matrix(Q_kal, "float"));
   str = str + sprintf("    .R%s,\n",print_matrix(R_kal, "float"));
+  str = str + sprintf("    .P0%s\n",   print_matrix(P0,    "float"));
   str = str + sprintf("  };\n");
   if exist("test_data", "var")
     str = str + sprintf("  exmath::matrix_t<float, %d, %d> const y_meas = %s;\n", size(test_data.y_meas), print_matrix(test_data.y_meas, "float"));
@@ -245,7 +253,72 @@ figure(); hold on; grid on;
     assert(fid);
     fprintf(fid,"%s", str);
   fclose(fid);
+%%
+  export_file_name   = "tst_data_calc_SISO_KalmanIntegralController";
+  namespace_location = "test_data::parameter";
 
+  str_hpp = "";
+  str_hpp = str_hpp + sprintf("#pragma once\n");
+  str_hpp = str_hpp + sprintf("#ifndef %s_HPP_INCLUDED\n", strrep(upper(export_file_name), ".", "_"));
+  str_hpp = str_hpp + sprintf("#define %s_HPP_INCLUDED\n\n", strrep(upper(export_file_name), ".", "_"));
+  
+  str_hpp = str_hpp + sprintf("#include <exmath.hpp>\n\n");
+  str_hpp = str_hpp + sprintf("#include <controller.hpp>\n\n");
+  
+  str_hpp = str_hpp + sprintf("namespace %s\n{\n", namespace_location);
+  str_hpp = str_hpp + sprintf("  using parameter_t = controller::calculator::SISO_KalmanIntegralController<float, 3>::parameter_t;\n");
+  str_hpp = str_hpp + sprintf("  extern parameter_t const param;\n");
+  if exist("test_data", "var")
+    str_hpp = str_hpp + sprintf("  extern exmath::matrix_t<float, %d, %d> const y_meas;\n", size(test_data.y_meas));
+    str_hpp = str_hpp + sprintf("  extern exmath::matrix_t<float, %d, %d> const u_star;\n", size(test_data.u_star));
+    str_hpp = str_hpp + sprintf("  extern exmath::matrix_t<float, %d, %d> const u_dash;\n", size(test_data.u_dash));
+    str_hpp = str_hpp + sprintf("  extern exmath::matrix_t<float, %d, %d> const u;\n", size(test_data.u));
+    str_hpp = str_hpp + sprintf("  extern exmath::matrix_t<float, %d, %d> const x;\n", size(test_data.x));
+    str_hpp = str_hpp + sprintf("  extern exmath::matrix_t<float, %d, %d> const r;\n", size(test_data.r));
+  end
+  str_hpp = str_hpp + sprintf("} // namespace %s\n\n", namespace_location);
+  str_hpp = str_hpp + sprintf("#endif\n\n");
+
+  fid = fopen(sprintf("out/%s.hpp", export_file_name), "w");
+    assert(fid);
+    fprintf(fid,"%s", str_hpp);
+  fclose(fid);
+
+  str = "";
+  str = str + sprintf('#include "%s.hpp\"\n\n', export_file_name);
+  str = str + sprintf("namespace %s\n{\n", namespace_location);
+  str = str + sprintf("  parameter_t const param{ // ... \n");
+  str = str + sprintf("    .observer{\n");
+  str = str + sprintf("      .sys{\n");
+  str = str + sprintf("        .A%s,\n",print_matrix(A_kal, "float"));
+  str = str + sprintf("        .B%s,\n",print_matrix(B_kal, "float"));
+  str = str + sprintf("        .C%s,\n",print_matrix(C_kal, "float"));
+  str = str + sprintf("        .X0%s\n", print_matrix(X0,    "float"));
+  str = str + sprintf("      },\n");
+  str = str + sprintf("      .Q%s,\n",print_matrix(Q_kal, "float"));
+  str = str + sprintf("      .R%s,\n",print_matrix(R_kal, "float"));
+  str = str + sprintf("      .P0%s\n",   print_matrix(P0,    "float"));
+  str = str + sprintf("    },\n");
+  str = str + sprintf("    .C_int%s,\n",print_matrix(C_int, "float"));
+  str = str + sprintf("    .hT_kal%s,\n",print_matrix(hT_kal, "float"));
+  str = str + sprintf("    .A_int%s,\n",print_matrix(A_int, "float"));
+  str = str + sprintf("    .B_int%s,\n",print_matrix(B_int, "float"));
+  str = str + sprintf("    .hT_int%s,\n",print_matrix(hT_int, "float"));
+  str = str + sprintf("  };\n");
+  if exist("test_data", "var")
+    str = str + sprintf("  exmath::matrix_t<float, %d, %d> const y_meas = %s;\n", size(test_data.y_meas), print_matrix(test_data.y_meas, "float"));
+    str = str + sprintf("  exmath::matrix_t<float, %d, %d> const u_star = %s;\n", size(test_data.u_star), print_matrix(test_data.u_star, "float"));
+    str = str + sprintf("  exmath::matrix_t<float, %d, %d> const u_dash = %s;\n", size(test_data.u_dash), print_matrix(test_data.u_dash, "float"));
+    str = str + sprintf("  exmath::matrix_t<float, %d, %d> const u      = %s;\n", size(test_data.u), print_matrix(test_data.u, "float"));
+    str = str + sprintf("  exmath::matrix_t<float, %d, %d> const x      = %s;\n", size(test_data.x), print_matrix(test_data.x, "float"));
+    str = str + sprintf("  exmath::matrix_t<float, %d, %d> const r      = %s;\n", size(test_data.r), print_matrix(test_data.r, "float"));
+  end
+  str = str + sprintf("} // namespace %s\n\n", namespace_location);
+
+  fid = fopen(sprintf("out/%s.cpp", export_file_name), "w");
+    assert(fid);
+    fprintf(fid,"%s", str);
+  fclose(fid);
 %%
 function sys = gen_current_sys(L, C, R1, RP)
   
